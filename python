@@ -1,0 +1,57 @@
+from fastapi import FastAPI, Body, status
+from fastapi.responses import JSONResponse, FileResponse
+import numpy as np
+from sklearn.datasets import load_iris
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler
+from keras.models import Sequential
+from keras.layers import Dense
+from keras.activations import relu, softmax
+from keras.losses import CategoricalCrossentropy
+from keras.metrics import categorical_accuracy
+
+iris = load_iris()
+X = iris.data
+y = iris.target
+
+from keras.utils import to_categorical
+y = to_categorical(y)
+
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
+scaler = StandardScaler()
+X_train = scaler.fit_transform(X_train)
+X_test = scaler.transform(X_test)
+
+model = Sequential()
+model.add(Dense(16, activation='relu', input_shape=(4,)))
+model.add(Dense(16, activation='relu'))
+model.add(Dense(3, activation='softmax'))
+
+model.compile(optimizer='adam', loss=CategoricalCrossentropy(), metrics=[categorical_accuracy])
+
+model.fit(X_train, y_train, epochs=100, validation_data=(X_test, y_test), batch_size=8, verbose=0)
+
+app = FastAPI()
+
+@app.get("/")
+async def main():
+    return FileResponse("main.html")
+
+@app.post("/response")
+async def response(data: dict = Body()):
+    sepal_length = data["sepal_length"]
+    sepal_width = data["sepal_width"]
+    petal_length = data["petal_length"]
+    petal_width = data["petal_width"]
+    predicted_type = predict_iris(sepal_length, sepal_width, petal_length, petal_width)
+
+    return {"message": f"{predicted_type}"}
+
+def predict_iris(sepal_length, sepal_width, petal_length, petal_width):
+    input_data = np.array([[sepal_length, sepal_width, petal_length, petal_width]])
+    input_data = scaler.transform(input_data)
+    prediction = model.predict(input_data)[0]
+    class_index = np.argmax(prediction)
+    iris_types = ['setosa', 'versicolor', 'virginica']
+    return iris_types[class_index]
